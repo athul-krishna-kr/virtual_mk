@@ -1,0 +1,1 @@
+SUBSYSTEM=="input", ATTRS{name}=="Virtual Mouse", SYMLINK+="input/by-id/usb-Virtual_Mouse-event-mouse"

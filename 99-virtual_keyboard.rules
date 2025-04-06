@@ -1,0 +1,1 @@
+SUBSYSTEM=="input", ATTRS{name}=="Virtual Keyboard", SYMLINK+="input/by-id/usb-Virtual_Keyboard-event-keyboard"
