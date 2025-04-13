@@ -46,7 +46,7 @@ static int inline keyboard_grab(struct virtual_keyboard *keyboard, struct input_
                 // printf("Keyboard ungrabbed\n");
             }
             else {
-                libevdev_grab(keyboard->evdev, LIBEVDEV_UNGRAB);
+                libevdev_grab(keyboard->evdev, LIBEVDEV_GRAB);
                 keyboard->grabbed = 1;
                 // printf("Keyboard grabbed\n");
             }
