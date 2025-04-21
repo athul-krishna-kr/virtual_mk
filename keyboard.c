@@ -12,17 +12,56 @@
 
 #define MAX_EVENTS 16
 
-struct grab_context {
-    int left_ctrl;
-    int right_ctrl;
+#define toggle_grab(keyboard) ({ \
+    libevdev_uinput_write_event((keyboard)->output_device, EV_KEY, KEY_LEFTCTRL, 1); \
+    libevdev_uinput_write_event((keyboard)->output_device, EV_SYN, SYN_REPORT, 0); \
+    libevdev_uinput_write_event((keyboard)->output_device, EV_KEY, KEY_RIGHTCTRL, 1); \
+    libevdev_uinput_write_event((keyboard)->output_device, EV_SYN, SYN_REPORT, 0); \
+    libevdev_uinput_write_event((keyboard)->output_device, EV_KEY, KEY_RIGHTCTRL, 0); \
+    libevdev_uinput_write_event((keyboard)->output_device, EV_SYN, SYN_REPORT, 0); \
+    libevdev_uinput_write_event((keyboard)->output_device, EV_KEY, KEY_LEFTCTRL, 0); \
+    libevdev_uinput_write_event((keyboard)->output_device, EV_SYN, SYN_REPORT, 0); \
+})
+
+static struct grab_context {
+    bool left_ctrl;
+    bool right_ctrl;
+    bool grab;
+} grab = {
+    .left_ctrl = 0,
+    .right_ctrl = 0,
+    .grab = 0,
 };
 
+static void inline __keyboard_grab(struct virtual_keyboard *keyboard, struct input_event *event)
+{
+    unsigned int i;
+
+    if (grab.left_ctrl && grab.right_ctrl) {
+        if (keyboard->grabbed)
+            grab.grab = 0;
+        else
+            grab.grab = 1;
+    }
+    else if (!grab.left_ctrl && !grab.right_ctrl) {
+        if (grab.grab) {
+            keyboard->grabbed = 1;
+            toggle_grab(keyboard);
+            libevdev_grab(keyboard->evdev, LIBEVDEV_GRAB);
+            // printf("Keyboard grabbed\n");
+        }
+        else {
+            keyboard->grabbed = 0;
+            libevdev_uinput_write_event(keyboard->output_device, EV_KEY, event->code, event->value);
+            libevdev_uinput_write_event(keyboard->output_device, EV_SYN, SYN_REPORT, 0);
+            libevdev_grab(keyboard->evdev, LIBEVDEV_UNGRAB);
+            // printf("Keyboard ungrabbed\n");
+        }
+        return;
+    }
+}
 static int inline keyboard_grab(struct virtual_keyboard *keyboard, struct input_event *event)
 {
-    static struct grab_context grab = {
-        .left_ctrl = 0,
-        .right_ctrl = 0,
-    };
     int code = event->code;
 
     if (event->type == EV_KEY && event->value != 2) {
@@ -30,26 +69,17 @@ static int inline keyboard_grab(struct virtual_keyboard *keyboard, struct input_
         {
             case KEY_LEFTCTRL:
                 grab.left_ctrl = event->value;
+                __keyboard_grab(keyboard, event);
                 break;
             
             case KEY_RIGHTCTRL:
                 grab.right_ctrl = event->value;
+                __keyboard_grab(keyboard, event);
+                
                 break;
             default:
                 break;
         }
-
-        if (grab.left_ctrl && grab.right_ctrl)
-            if (keyboard->grabbed) {
-                libevdev_grab(keyboard->evdev, LIBEVDEV_UNGRAB);
-                keyboard->grabbed = 0;
-                // printf("Keyboard ungrabbed\n");
-            }
-            else {
-                libevdev_grab(keyboard->evdev, LIBEVDEV_GRAB);
-                keyboard->grabbed = 1;
-                // printf("Keyboard grabbed\n");
-            }
     }
 
     return keyboard->grabbed;
