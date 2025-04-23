@@ -27,38 +27,45 @@ static struct grab_context {
     bool left_ctrl;
     bool right_ctrl;
     bool grab;
+    unsigned int count;
 } grab = {
     .left_ctrl = 0,
     .right_ctrl = 0,
     .grab = 0,
+    .count = 0,
 };
 
 static void inline __keyboard_grab(struct virtual_keyboard *keyboard, struct input_event *event)
 {
-    unsigned int i;
-
     if (grab.left_ctrl && grab.right_ctrl) {
-        if (keyboard->grabbed)
-            grab.grab = 0;
-        else
-            grab.grab = 1;
+        /* LCTRL(Down: 1) -> RCTRL(Down: 2) */
+        if (grab.count == 1)
+            if (keyboard->grabbed)
+                grab.grab = 0;
+            else
+                grab.grab = 1;
     }
     else if (!grab.left_ctrl && !grab.right_ctrl) {
-        if (grab.grab) {
-            keyboard->grabbed = 1;
-            toggle_grab(keyboard);
-            libevdev_grab(keyboard->evdev, LIBEVDEV_GRAB);
-            // printf("Keyboard grabbed\n");
+        /* LCTRL(Down: 1) -> RCTRL(Down: 2) -> RCTRL(Up: 3) -> LCTRL(Up: 4) */
+        if (grab.count == 3) {
+            if (grab.grab) {
+                keyboard->grabbed = 1;
+                toggle_grab(keyboard);
+                libevdev_grab(keyboard->evdev, LIBEVDEV_GRAB);
+                // printf("Keyboard grabbed\n");
+            }
+            else {
+                keyboard->grabbed = 0;
+                libevdev_uinput_write_event(keyboard->output_device, EV_KEY, event->code, event->value);
+                libevdev_uinput_write_event(keyboard->output_device, EV_SYN, SYN_REPORT, 0);
+                libevdev_grab(keyboard->evdev, LIBEVDEV_UNGRAB);
+                // printf("Keyboard ungrabbed\n");
+            }
         }
-        else {
-            keyboard->grabbed = 0;
-            libevdev_uinput_write_event(keyboard->output_device, EV_KEY, event->code, event->value);
-            libevdev_uinput_write_event(keyboard->output_device, EV_SYN, SYN_REPORT, 0);
-            libevdev_grab(keyboard->evdev, LIBEVDEV_UNGRAB);
-            // printf("Keyboard ungrabbed\n");
-        }
+        grab.count = 0;
         return;
     }
+    grab.count++;
 }
 static int inline keyboard_grab(struct virtual_keyboard *keyboard, struct input_event *event)
 {
